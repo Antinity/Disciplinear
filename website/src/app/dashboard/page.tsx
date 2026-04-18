@@ -49,6 +49,9 @@ export default async function DashboardPage() {
     };
   });
 
+  const buildHabits = habits.filter(h => h.mode === 'build');
+  const quitHabits = habits.filter(h => h.mode === 'quit');
+
   // Build current year heatmap data (Jan 1 to Dec 31)
   const daysYear = eachDayOfInterval({ 
     start: startOfThisYear, 
@@ -56,7 +59,26 @@ export default async function DashboardPage() {
   }).map(d => {
     const dateStr = format(d, 'yyyy-MM-dd');
     const logsForDay = allLogs.filter(l => l.log_date === dateStr);
-    return { date: dateStr, count: logsForDay.length, total: habitCount };
+    
+    // Succesful builds
+    const buildCompleted = logsForDay.filter(l => {
+      const h = buildHabits.find(h => h.id === l.habit_id);
+      return !!h;
+    }).length;
+
+    // Relapsed quits
+    const quitRelapsed = logsForDay.filter(l => {
+      const h = quitHabits.find(h => h.id === l.habit_id);
+      return !!h;
+    }).length;
+
+    return { 
+      date: dateStr, 
+      count: buildCompleted, 
+      relapsed: quitRelapsed,
+      totalBuild: buildHabits.length,
+      totalQuit: quitHabits.length
+    };
   });
 
   const formattedDate = format(new Date(), 'EEEE, MMMM do');

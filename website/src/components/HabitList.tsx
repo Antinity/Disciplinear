@@ -18,6 +18,7 @@ export type Habit = {
   frequency: string | string[];
   target_value?: number;
   unit?: string;
+  start_date: string;
 };
 
 export type HabitLog = {
@@ -26,23 +27,50 @@ export type HabitLog = {
   value?: number;
 };
 
-function calculateStreak(logs: string[]): number {
-  if (!logs.length) return 0;
-  const sorted = [...logs].sort((a, b) => b.localeCompare(a));
+function calculateStreak(logs: string[], mode: 'build' | 'quit', startDate: string): number {
   const today = new Date();
-  let streak = 0;
-  let cursor = new Date(today);
-  cursor.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
 
-  for (const dateStr of sorted) {
-    const d = new Date(dateStr);
-    d.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((cursor.getTime() - d.getTime()) / 86400000);
-    if (diffDays === 0) { streak++; cursor.setDate(cursor.getDate() - 1); }
-    else if (diffDays === 1) { streak++; cursor = d; cursor.setDate(cursor.getDate() - 1); }
-    else break;
+  if (mode === 'build') {
+    if (!logs.length) return 0;
+    const sorted = [...logs].sort((a, b) => b.localeCompare(a));
+    let streak = 0;
+    let cursor = new Date(today);
+
+    for (const dateStr of sorted) {
+      const d = new Date(dateStr);
+      d.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((cursor.getTime() - d.getTime()) / 86400000);
+      if (diffDays === 0) {
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+      } else if (diffDays === 1) {
+        streak++;
+        cursor = d;
+        cursor.setDate(cursor.getDate() - 1);
+      } else break;
+    }
+    return streak;
+  } else {
+    // QUIT MODE: Consecutive days WITHOUT a log (relapse)
+    // Streak starts from startDate or the day after the most recent relapse
+    const sortedRelapses = [...logs].sort((a, b) => b.localeCompare(a));
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+
+    // If never relapsed, streak is days since start
+    if (sortedRelapses.length === 0) {
+      return Math.max(0, Math.round((today.getTime() - start.getTime()) / 86400000));
+    }
+
+    const lastRelapseStr = sortedRelapses[0];
+    const lastRelapse = new Date(lastRelapseStr);
+    lastRelapse.setHours(0, 0, 0, 0);
+
+    if (lastRelapse.getTime() === today.getTime()) return 0; // Relapsed today
+
+    return Math.max(0, Math.round((today.getTime() - lastRelapse.getTime()) / 86400000));
   }
-  return streak;
 }
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
@@ -117,7 +145,7 @@ export default function HabitList({
         const log = logs.find(l => l.habit_id === habit.id);
         const isCompleted = !!log?.is_completed;
         const habitAllLogs = allLogs.filter(l => l.habit_id === habit.id && l.is_completed).map(l => l.log_date);
-        const streak = calculateStreak(habitAllLogs);
+        const streak = calculateStreak(habitAllLogs, habit.mode, habit.start_date);
 
         return (
           <HabitCard
@@ -158,15 +186,18 @@ function HabitCard({
     });
   };
 
-  const getStreakIcon = (s: number) => {
+  const getStreakIcon = (s: number, mode: 'build' | 'quit') => {
     if (s <= 0) return null;
+    const emoji = mode === 'quit' ? '🛡️' : '🔥';
+    const colorClass = mode === 'quit' ? 'text-blue-500' : 'text-orange-500';
+
     if (s < 3) return <span key="s1" className="text-emerald-500 opacity-60">🌱</span>;
-    if (s < 7) return <span key="s2" className="text-orange-500">🔥</span>;
-    if (s < 14) return <span key="s3" className="text-orange-600 drop-shadow-sm font-bold animate-pulse">🔥</span>;
+    if (s < 7) return <span key="s2" className={colorClass}>{emoji}</span>;
+    if (s < 14) return <span key="s3" className={`${colorClass} drop-shadow-sm font-bold animate-pulse`}>{emoji}</span>;
     return (
-       <div key="s4" className="relative streak-active">
-          <span className="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">✨🔥</span>
-       </div>
+      <div key="s4" className="relative streak-active">
+        <span className="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">✨{emoji}</span>
+      </div>
     );
   };
 
@@ -182,10 +213,9 @@ function HabitCard({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.03, duration: 0.3 }}
-        className={`group relative flex items-center gap-3 p-2.5 rounded-[40px] transition-colors cursor-pointer select-none border border-transparent ${
-          displayCompleted ? 'opacity-80' : 'hover:bg-[var(--bg-hover)]'
-        }`}
-        style={{ 
+        className={`group relative flex items-center gap-3 p-2.5 rounded-[40px] transition-colors cursor-pointer select-none border border-transparent ${displayCompleted ? 'opacity-80' : 'hover:bg-[var(--bg-hover)]'
+          }`}
+        style={{
           backgroundColor: `${habit.color}15`,
           border: `1px solid ${displayCompleted ? 'transparent' : `${habit.color}30`}`
         }}
@@ -194,10 +224,10 @@ function HabitCard({
         {/* Left Icon/Emoji Section */}
         {habit.emoji ? (
           <div className="shrink-0 w-[44px] h-[44px] flex items-center justify-center transition-opacity group-active:opacity-80">
-             <Twemoji emoji={habit.emoji} className="w-[32px] h-[32px]" />
+            <Twemoji emoji={habit.emoji} className="w-[32px] h-[32px]" />
           </div>
         ) : (
-          <div 
+          <div
             className="shrink-0 w-[44px] h-[44px] rounded-full flex items-center justify-center text-white text-xl shadow-sm transition-opacity group-active:opacity-80"
             style={{ backgroundColor: habit.color }}
           >
@@ -207,47 +237,47 @@ function HabitCard({
 
         {/* Text Area */}
         <div className="flex-1 min-w-0 pr-2">
-          <p className={`font-black text-[15px] text-[var(--text-primary)] leading-tight truncate ${isQuit && isCompleted ? 'line-through text-[var(--text-muted)]' : ''}`}>
+          <p className="font-black text-[15px] text-[var(--text-primary)] leading-tight truncate">
             {habit.name}
           </p>
           <p className="text-[11px] font-bold text-[var(--text-secondary)] mt-0.5 truncate opacity-70 tracking-tight leading-none">
-            {habit.type === 'amount' 
-              ? `${habit.target_value} ${habit.unit || 'units'}` 
-              : habit.type === 'timer' 
-                ? `${habit.target_value} mins` 
-                : habit.description || 'Consistency is Key'}
+            {habit.type === 'amount'
+              ? `${habit.target_value} ${habit.unit || 'units'}`
+              : habit.type === 'timer'
+                ? `${habit.target_value} mins`
+                : habit.description || (isQuit ? 'Clean Streak' : 'Building...')}
           </p>
         </div>
+
+        <button
+          onClick={() => setIsEditing(true)}
+          className="opacity-0 group-hover:opacity-100 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+        >
+          <Pencil size={18} />
+        </button>
 
         {/* Action / Streak Check */}
         <div className="flex items-center gap-2.5 shrink-0 pr-1" onClick={e => e.stopPropagation()}>
           {streak >= 1 && (
-             <div className="flex items-center gap-1">
-                {getStreakIcon(streak)}
-                <span className="text-[11px] font-black text-[var(--text-secondary)] tabular-nums">{streak}</span>
-             </div>
+            <div className="flex items-center gap-1">
+              {getStreakIcon(streak, habit.mode)}
+              <span className="text-[11px] font-black text-[var(--text-secondary)] tabular-nums">{streak}</span>
+            </div>
           )}
-          
-          <button
-            onClick={() => setIsEditing(true)}
-            className="opacity-0 group-hover:opacity-100 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
-          >
-            <Pencil size={18} />
-          </button>
 
           <div
             onClick={handleToggle}
             className={`w-[36px] h-[36px] rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${isPending ? 'opacity-40 animate-pulse' : ''}`}
             style={{
-              borderColor: habit.color,
-              backgroundColor: displayCompleted ? habit.color : 'transparent',
-              color: displayCompleted ? 'white' : habit.color
+              borderColor: isQuit ? (isCompleted ? '#ef4444' : habit.color) : habit.color,
+              backgroundColor: isCompleted ? (isQuit ? '#ef4444' : habit.color) : 'transparent',
+              color: isCompleted ? 'white' : (isQuit ? '#ef4444' : habit.color)
             }}
           >
             {isQuit ? (
-              isCompleted ? <Trash2 size={18} /> : <Check size={18} />
+              isCompleted && <X size={20} strokeWidth={3} />
             ) : (
-              displayCompleted ? <Check size={20} strokeWidth={3.5} /> : <div className="w-2.5 h-2.5 rounded-full" style={{ background: habit.color }} />
+              isCompleted && <Check size={20} strokeWidth={3.5} />
             )}
           </div>
         </div>

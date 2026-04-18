@@ -6,8 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 type DayData = {
   date: string;       // yyyy-MM-dd
-  count: number;
-  total: number;
+  count: number;      // Successful Build habits
+  relapsed: number;   // Relapsed Quit habits
+  totalBuild: number;
+  totalQuit: number;
 };
 
 type TooltipState = {
@@ -17,17 +19,16 @@ type TooltipState = {
 } | null;
 
 // 7-row (Sun→Sat) heatmap that fills columns left→right
-export default function HeatmapInline({ days, totalHabits }: { days: DayData[]; totalHabits: number }) {
+export default function HeatmapInline({ days }: { days: DayData[] }) {
   const [tooltip, setTooltip] = useState<TooltipState>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Group into columns of 7 (weeks). Sunday = 0
+  // Group into columns of 7 (weeks)
   const weeks: (DayData | null)[][] = [];
   let week: (DayData | null)[] = [];
 
-  // Pad start so first day is correctly aligned (blank space for preceding weekdays)
   const firstDay = days[0] ? parseISO(days[0].date) : new Date();
-  const startDow = firstDay.getDay(); // 0=Sun
+  const startDow = firstDay.getDay(); 
   for (let p = 0; p < startDow; p++) week.push(null);
 
   for (const day of days) {
@@ -37,21 +38,33 @@ export default function HeatmapInline({ days, totalHabits }: { days: DayData[]; 
       week = [];
     }
   }
-  // Fill the rest of the last week with blank spaces if any
   if (week.length) {
     while (week.length < 7) week.push(null);
     weeks.push(week);
   }
 
   const getColor = (d: DayData | null) => {
-    if (!d || !d.date) return 'transparent'; // Truly blank
-    if (d.total === 0) return 'var(--border-subtle)';
-    const pct = d.count / d.total;
-    if (pct === 0) return 'var(--border-subtle)';
-    if (pct < 0.25) return 'rgba(52, 199, 89, 0.3)';
-    if (pct < 0.5) return 'rgba(52, 199, 89, 0.6)';
-    if (pct < 0.75) return 'rgba(52, 199, 89, 0.85)';
-    return '#34c759'; // Full Apple Green
+    if (!d || !d.date) return 'transparent';
+    const { count, relapsed } = d;
+    
+    if (count === 0 && relapsed === 0) return 'var(--border-subtle)';
+    
+    // BOTH = Yellow
+    if (count > 0 && relapsed > 0) {
+      return '#ffcc00'; // Apple Yellow
+    }
+    
+    // Bad over Good (or just Bad if Good is 0)
+    if (relapsed > count) {
+       return '#ff3b30'; // Apple Red
+    }
+    
+    // Good over Bad
+    if (count > relapsed) {
+       return '#34c759'; // Apple Green
+    }
+
+    return 'var(--border-subtle)';
   };
 
   const handleMouseMove = useCallback((e: React.MouseEvent, d: DayData | null) => {
@@ -109,38 +122,70 @@ export default function HeatmapInline({ days, totalHabits }: { days: DayData[]; 
       <AnimatePresence>
         {tooltip && (
           <motion.div
-            className="heatmap-tooltip"
+            className="heatmap-tooltip p-3 min-w-[140px]"
             style={{ left: tooltip.x, top: tooltip.y }}
             initial={{ opacity: 0, scale: 0.9, y: 5 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 5 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
           >
-            <div className="font-bold text-[var(--text-primary)] mb-1">
+            <div className="font-bold text-[var(--text-primary)] mb-2 border-b border-[var(--border-subtle)] pb-1.5 text-[12px]">
               {format(parseISO(tooltip.data.date), 'MMM d, yyyy')}
             </div>
-            <div className="text-[var(--text-secondary)] font-medium">
-              {tooltip.data.count} / {tooltip.data.total} habits
-            </div>
-            {tooltip.data.total > 0 && (
-              <div className="mt-2 h-1.5 rounded-full bg-[var(--border-subtle)] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[#34c759] transition-all duration-300"
-                  style={{ width: `${Math.round((tooltip.data.count / tooltip.data.total) * 100)}%` }}
-                />
+            
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Completed</span>
+                <span className="text-[11px] font-black text-emerald-500 tabular-nums">
+                   {tooltip.data.count}/{tooltip.data.totalBuild}
+                </span>
               </div>
-            )}
+              
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Relapsed</span>
+                <span className={`text-[11px] font-black tabular-nums ${tooltip.data.relapsed > 0 ? 'text-red-500 animate-pulse' : 'text-[var(--text-muted)]'}`}>
+                   {tooltip.data.relapsed}/{tooltip.data.totalQuit}
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic Status Tag */}
+            <div className="mt-2.5 pt-2 border-t border-[var(--border-subtle)]">
+                {tooltip.data.relapsed === 0 && tooltip.data.count > 0 && (
+                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/80">✨ Perfect Day</span>
+                )}
+                {tooltip.data.relapsed > 0 && tooltip.data.count > 0 && (
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[#ffcc00]/80">⚠️ Mixed Results</span>
+                )}
+                {tooltip.data.relapsed > 0 && tooltip.data.count === 0 && (
+                   <span className="text-[10px] font-black uppercase tracking-widest text-red-500/80">🚫 Failed</span>
+                )}
+                {tooltip.data.relapsed === 0 && tooltip.data.count === 0 && (
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)]">No Logs</span>
+                )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Legend */}
-      <div className="flex items-center justify-end gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)] mt-1">
-        <span>Less</span>
-        {['var(--border-subtle)', 'rgba(52, 199, 89, 0.3)', 'rgba(52, 199, 89, 0.6)', 'rgba(52, 199, 89, 0.85)', '#34c759'].map(c => (
-          <div key={c} className="w-[12px] h-[12px] rounded-[3px]" style={{ backgroundColor: c }} />
-        ))}
-        <span>More</span>
+      <div className="flex items-center justify-end gap-3 text-[10px] font-bold text-[var(--text-secondary)] mt-2 uppercase tracking-widest opacity-60">
+        <div className="flex items-center gap-1">
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-[var(--border-subtle)]" />
+          <span>Empty</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-[#34c759]" />
+          <span>Success</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-[#ffcc00]" />
+          <span>Mixed</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-[10px] h-[10px] rounded-[2px] bg-[#ff3b30]" />
+          <span>Relapse</span>
+        </div>
       </div>
     </div>
   );
