@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { X, Trophy, Target, TrendingUp, Calendar } from 'lucide-react';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { format, parseISO, differenceInDays, subDays } from 'date-fns';
 import Twemoji from './Twemoji';
 import { calculateStreak } from '@/utils/analytics';
 
