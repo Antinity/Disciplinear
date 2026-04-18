@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect } from 'react';
+import { useState, useTransition, useRef, useEffect, useOptimistic } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Pencil, Trash2 } from 'lucide-react';
+import { Check, X, Pencil, Trash2, BarChart2 } from 'lucide-react';
 import { toggleHabitLog, updateHabit, deleteHabit } from '@/app/dashboard/actions';
 import { HabitForm } from './AddHabitModal';
 import Twemoji from './Twemoji';
+import Sparkline from './Sparkline';
+import { subDays, format } from 'date-fns';
+import HabitAnalyticsModal from './HabitAnalyticsModal';
+import { calculateStreak } from '@/utils/analytics';
 
 export type Habit = {
   id: string;
@@ -27,51 +31,6 @@ export type HabitLog = {
   value?: number;
 };
 
-function calculateStreak(logs: string[], mode: 'build' | 'quit', startDate: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (mode === 'build') {
-    if (!logs.length) return 0;
-    const sorted = [...logs].sort((a, b) => b.localeCompare(a));
-    let streak = 0;
-    let cursor = new Date(today);
-
-    for (const dateStr of sorted) {
-      const d = new Date(dateStr);
-      d.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((cursor.getTime() - d.getTime()) / 86400000);
-      if (diffDays === 0) {
-        streak++;
-        cursor.setDate(cursor.getDate() - 1);
-      } else if (diffDays === 1) {
-        streak++;
-        cursor = d;
-        cursor.setDate(cursor.getDate() - 1);
-      } else break;
-    }
-    return streak;
-  } else {
-    // QUIT MODE: Consecutive days WITHOUT a log (relapse)
-    // Streak starts from startDate or the day after the most recent relapse
-    const sortedRelapses = [...logs].sort((a, b) => b.localeCompare(a));
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-
-    // If never relapsed, streak is days since start
-    if (sortedRelapses.length === 0) {
-      return Math.max(0, Math.round((today.getTime() - start.getTime()) / 86400000));
-    }
-
-    const lastRelapseStr = sortedRelapses[0];
-    const lastRelapse = new Date(lastRelapseStr);
-    lastRelapse.setHours(0, 0, 0, 0);
-
-    if (lastRelapse.getTime() === today.getTime()) return 0; // Relapsed today
-
-    return Math.max(0, Math.round((today.getTime() - lastRelapse.getTime()) / 86400000));
-  }
-}
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 export function EditHabitModal({ habit, onClose }: { habit: Habit; onClose: () => void }) {
@@ -123,11 +82,13 @@ export default function HabitList({
   logs,
   today,
   allLogs,
+  onToggle,
 }: {
   habits: Habit[];
   logs: HabitLog[];
   today: string;
   allLogs: { habit_id: string; log_date: string; is_completed: boolean }[];
+  onToggle: (habitId: string, newVal: boolean) => Promise<void>;
 }) {
   if (habits.length === 0) {
     return (
@@ -141,23 +102,38 @@ export default function HabitList({
 
   return (
     <div className="flex flex-col gap-2">
-      {habits.map((habit, i) => {
-        const log = logs.find(l => l.habit_id === habit.id);
-        const isCompleted = !!log?.is_completed;
-        const habitAllLogs = allLogs.filter(l => l.habit_id === habit.id && l.is_completed).map(l => l.log_date);
-        const streak = calculateStreak(habitAllLogs, habit.mode, habit.start_date);
+      <AnimatePresence mode="popLayout">
+        {habits.map((habit, i) => {
+          const log = logs.find(l => l.habit_id === habit.id);
+          const isCompleted = !!log?.is_completed;
+          const habitAllLogs = allLogs.filter(l => l.habit_id === habit.id && l.is_completed).map(l => l.log_date);
+          const streak = calculateStreak(habitAllLogs, habit.mode, habit.start_date);
 
-        return (
-          <HabitCard
-            key={habit.id}
-            habit={habit}
-            isCompleted={isCompleted}
-            today={today}
-            index={i}
-            streak={streak}
-          />
-        );
-      })}
+          // Calculate 7-day history for sparkline
+          const history = Array.from({ length: 7 }, (_, i) => {
+            const date = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
+            const hasLog = allLogs.some(l => l.habit_id === habit.id && l.log_date === date && l.is_completed);
+            if (habit.mode === 'build') return hasLog ? 1 : 0;
+            return hasLog ? 0 : 1; // For quit mode, no log = 1 (success)
+          });
+
+          return (
+            <HabitCard
+              key={habit.id}
+              habit={habit}
+              isCompleted={isCompleted}
+              today={today}
+              index={i}
+              streak={streak}
+              history={history}
+              allLogs={allLogs}
+              onToggle={async (newVal) => {
+                await onToggle(habit.id, newVal);
+              }}
+            />
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
@@ -168,21 +144,28 @@ function HabitCard({
   today,
   index,
   streak,
+  history,
+  allLogs,
+  onToggle,
 }: {
   habit: Habit;
   isCompleted: boolean;
   today: string;
   index: number;
   streak: number;
+  history: number[];
+  allLogs: { habit_id: string; log_date: string; is_completed: boolean }[];
+  onToggle: (newVal: boolean) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const isQuit = habit.mode === 'quit';
   const displayCompleted = isQuit ? !isCompleted : isCompleted;
 
   const handleToggle = () => {
-    startTransition(() => {
-      toggleHabitLog(habit.id, today, !isCompleted);
+    startTransition(async () => {
+      await onToggle(!isCompleted);
     });
   };
 
@@ -207,12 +190,26 @@ function HabitCard({
         {isEditing && (
           <EditHabitModal key={`modal-${habit.id}`} habit={habit} onClose={() => setIsEditing(false)} />
         )}
+        {showAnalytics && (
+          <HabitAnalyticsModal 
+            key={`analytics-${habit.id}`} 
+            habit={habit} 
+            logs={allLogs.filter(l => l.habit_id === habit.id)} 
+            onClose={() => setShowAnalytics(false)} 
+          />
+        )}
       </AnimatePresence>
 
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.03, duration: 0.3 }}
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ 
+          layout: { type: "spring", stiffness: 300, damping: 30 },
+          opacity: { duration: 0.2 },
+          scale: { duration: 0.2 }
+        }}
         className={`group relative flex items-center gap-3 p-2.5 rounded-[40px] transition-colors cursor-pointer select-none border border-transparent ${displayCompleted ? 'opacity-80' : 'hover:bg-[var(--bg-hover)]'
           }`}
         style={{
@@ -249,15 +246,26 @@ function HabitCard({
           </p>
         </div>
 
+        <div className="hidden md:block mr-4 opacity-40 group-hover:opacity-100 transition-opacity">
+          <Sparkline data={history} color={habit.color} />
+        </div>
+
         <button
-          onClick={() => setIsEditing(true)}
+          onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
           className="opacity-0 group-hover:opacity-100 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
         >
           <Pencil size={18} />
         </button>
 
         {/* Action / Streak Check */}
-        <div className="flex items-center gap-2.5 shrink-0 pr-1" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 shrink-0 pr-1" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setShowAnalytics(true)}
+            className="opacity-0 group-hover:opacity-100 p-2 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+          >
+            <BarChart2 size={18} />
+          </button>
+
           {streak >= 1 && (
             <div className="flex items-center gap-1">
               {getStreakIcon(streak, habit.mode)}
