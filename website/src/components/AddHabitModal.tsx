@@ -256,7 +256,7 @@ export function HabitForm({ initialData, onSubmit, onClose, submitLabel = 'Creat
               <Calendar
                 mode="single"
                 selected={startDate ? new Date(startDate) : undefined}
-                onSelect={(val) => setStartDate(val ? val.toISOString().split('T')[0] : '')}
+                onSelect={(val) => setStartDate(val ? format(val, 'yyyy-MM-dd') : '')}
                 initialFocus
               />
             </PopoverContent>
@@ -288,7 +288,7 @@ export function HabitForm({ initialData, onSubmit, onClose, submitLabel = 'Creat
               <Calendar
                 mode="single"
                 selected={endDate ? new Date(endDate) : undefined}
-                onSelect={(val) => setEndDate(val ? val.toISOString().split('T')[0] : '')}
+                onSelect={(val) => setEndDate(val ? format(val, 'yyyy-MM-dd') : '')}
                 initialFocus
               />
             </PopoverContent>

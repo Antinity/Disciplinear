@@ -48,8 +48,8 @@ export default function HeatmapInline({ days }: { days: DayData[] }) {
     const { count, relapsed, totalBuild, totalQuit } = d;
 
     const totalPossible = totalBuild + totalQuit;
-    if (totalPossible === 0) return { backgroundColor: '#161b22' };
-    
+    if (totalPossible === 0) return { backgroundColor: 'var(--cell-bg)' };
+
     // Success Rate
     const buildSuccesses = count;
     const quitSuccesses = totalQuit - relapsed;
@@ -75,19 +75,19 @@ export default function HeatmapInline({ days }: { days: DayData[] }) {
     // 2. Failed Day (No builds reached OR any relapses)
     // If we have relapses, we definitely want to show some red.
     if (relapsed > 0 && count === 0) {
-        return { backgroundColor: redLevels[getLevel(relapsed / totalQuit)] };
+      return { backgroundColor: redLevels[getLevel(relapsed / totalQuit)] };
     }
 
     // 3. Mixed Day (Some builds done, some relapses or missed builds)
     if (successRate > 0 && successRate < 1) {
-        // If relapsed, or missed build, use lower green or red?
-        // Let's use green for general activity, but the red overlay in JSX will handle the tint if relapsed.
-        return { backgroundColor: greenLevels[getLevel(successRate)] };
+      // If relapsed, or missed build, use lower green or red?
+      // Let's use green for general activity, but the red overlay in JSX will handle the tint if relapsed.
+      return { backgroundColor: greenLevels[getLevel(successRate)] };
     }
 
     // 4. Absolute Failure (0 successes)
     if (successRate === 0) {
-        return { backgroundColor: redLevels[3] };
+      return { backgroundColor: redLevels[3] };
     }
 
     return { backgroundColor: '#161b22' };
@@ -165,7 +165,7 @@ export default function HeatmapInline({ days }: { days: DayData[] }) {
       <AnimatePresence>
         {tooltip && (
           <motion.div
-            className="heatmap-tooltip p-3 min-w-[140px]"
+            className="heatmap-tooltip backdrop-blur-xs p-3 min-w-[140px]"
             style={{ left: tooltip.x, top: tooltip.y }}
             initial={{ opacity: 0, scale: 0.9, y: 5 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -194,10 +194,10 @@ export default function HeatmapInline({ days }: { days: DayData[] }) {
 
             <div className="mt-2.5 pt-2 border-t border-[var(--border-subtle)]">
               {(() => {
-                const isPerfect = tooltip.data.relapsed === 0 && 
-                                 tooltip.data.count === tooltip.data.totalBuild && 
-                                 (tooltip.data.totalBuild > 0 || (tooltip.data as any).totalQuit > 0);
-                
+                const isPerfect = tooltip.data.relapsed === 0 &&
+                  tooltip.data.count === tooltip.data.totalBuild &&
+                  (tooltip.data.totalBuild > 0 || (tooltip.data as any).totalQuit > 0);
+
                 if (isPerfect) return (
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/80">Perfect Day</span>
                 );

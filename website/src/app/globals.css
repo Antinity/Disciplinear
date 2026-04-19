@@ -6,7 +6,7 @@
 
 :root {
   --bg-base: #f4f4f5;
-  --bg-card: rgba(255, 255, 255, 0.94);
+  --bg-card: rgba(255, 255, 255, 0.44);
   --bg-input: rgba(244, 244, 245, 0.8);
   --bg-hover: rgba(228, 228, 231, 0.6);
   --border-subtle: rgba(228, 228, 231, 0.8);
@@ -15,6 +15,7 @@
   --text-muted: #a1a1aa;
   --accent-color: #4f46e5;
   --accent-text: #ffffff;
+  --cell-bg: #f5f5f5;
   
   /* Shadcn Overrides */
   --background: var(--bg-base);
@@ -39,15 +40,16 @@
 
 .dark {
   --bg-base: #000000;
-  --bg-card: rgba(18, 18, 18, 0.9);
+  --bg-card: rgba(18, 18, 18, 0.3);
   --bg-input: rgba(28, 28, 30, 0.8);
-  --bg-hover: rgba(39, 39, 42, 0.9);
+  --bg-hover: rgba(255, 255, 255, 0.1);
   --border-subtle: rgba(50, 50, 52, 0.6);
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
   --text-muted: #636366;
   --accent-color: #5856d6;
   --accent-text: #ffffff;
+  --cell-bg: #161b22;
 
   /* Shadcn Overrides */
   --background: var(--bg-base);
@@ -100,8 +102,8 @@ body {
 /* Base Component Classes */
 .glass-panel {
   background: var(--bg-card);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
 }

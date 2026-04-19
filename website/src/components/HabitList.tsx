@@ -191,11 +191,11 @@ function HabitCard({
           <EditHabitModal key={`modal-${habit.id}`} habit={habit} onClose={() => setIsEditing(false)} />
         )}
         {showAnalytics && (
-          <HabitAnalyticsModal 
-            key={`analytics-${habit.id}`} 
-            habit={habit} 
-            logs={allLogs.filter(l => l.habit_id === habit.id)} 
-            onClose={() => setShowAnalytics(false)} 
+          <HabitAnalyticsModal
+            key={`analytics-${habit.id}`}
+            habit={habit}
+            logs={allLogs.filter(l => l.habit_id === habit.id)}
+            onClose={() => setShowAnalytics(false)}
           />
         )}
       </AnimatePresence>
@@ -205,7 +205,7 @@ function HabitCard({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ 
+        transition={{
           layout: { type: "spring", stiffness: 300, damping: 30 },
           opacity: { duration: 0.2 },
           scale: { duration: 0.2 }

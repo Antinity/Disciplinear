@@ -1,27 +1,32 @@
+'use client';
+
 import Link from 'next/link';
-import { Home, CalendarDays, BarChart2, Settings, LogOut } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Home, BarChart2, Settings, LogOut } from 'lucide-react';
 import { signout } from '@/app/login/actions';
+import { motion } from 'framer-motion';
 
 export default function Sidebar() {
+  const pathname = usePathname();
+
   return (
-    <div className="w-full md:w-[260px] md:h-screen md:sticky top-0 flex flex-col pt-10 pb-6 px-4 md:px-6">
+    <div className="w-full glass-panel md:w-[260px] md:h-screen md:sticky top-0 flex flex-col pt-10 pb-6 px-4 md:px-6">
       <div className="mb-10 pl-2">
-        <Link href="/dashboard" className="font-bold text-2xl tracking-tight text-[var(--text-primary)] flex items-center gap-3 transition-transform origin-left">
-          <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-[var(--accent-color)] to-indigo-400 shadow-sm transform -rotate-3" />
+        <Link href="/dashboard" className="font-black text-2xl tracking-tighter text-[var(--text-primary)] flex items-center gap-3 transition-transform origin-left">
           Disciplinear
         </Link>
       </div>
 
       <nav className="flex-1 space-y-1">
-        <SidebarLink href="/dashboard" icon={<Home size={18} />} label="Home" />
-        <SidebarLink href="/dashboard/stats" icon={<BarChart2 size={18} />} label="Analytics" />
+        <SidebarLink href="/dashboard" icon={<Home size={18} />} label="Home" active={pathname === '/dashboard'} />
+        <SidebarLink href="/dashboard/stats" icon={<BarChart2 size={18} />} label="Analytics" active={pathname === '/dashboard/stats'} />
       </nav>
 
-      <div className="space-y-1">
-        <SidebarLink href="/dashboard/settings" icon={<Settings size={18} />} label="Settings" />
+      <div className="space-y-1 pt-6 border-t border-[var(--border-subtle)]">
+        <SidebarLink href="/dashboard/settings" icon={<Settings size={18} />} label="Settings" active={pathname === '/dashboard/settings'} />
         <form action={signout}>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-[15px] font-medium rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all">
-            <LogOut size={18} />
+          <button className="group w-full flex items-center gap-3 px-4 py-3 text-[14px] font-bold rounded-xl text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-all">
+            <LogOut size={18} className="transition-transform group-hover:-translate-x-1" />
             Sign Out
           </button>
         </form>
@@ -30,11 +35,15 @@ export default function Sidebar() {
   );
 }
 
-function SidebarLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+function SidebarLink({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active?: boolean }) {
   return (
-    <Link href={href} className="flex items-center gap-3 px-3 py-2.5 text-[15px] font-medium rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all active:scale-[0.98]">
-      {icon}
-      {label}
+    <Link
+      href={href}
+      className={`relative flex items-center gap-3 px-4 py-3 text-[14px] font-[700] rounded-xl transition-all hover:bg-[var(--bg-hover)] active:scale-[0.97] ${active ? 'text-[var(--text-primary)] bg-[var(--bg-hover)]/50' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+        }`}
+    >
+      <span className="relative z-10">{icon}</span>
+      <span className="relative z-10">{label}</span>
     </Link>
   );
 }
