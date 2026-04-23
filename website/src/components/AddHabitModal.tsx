@@ -232,9 +232,8 @@ export function HabitForm({ initialData, onSubmit, onClose, submitLabel = 'Creat
               <button
                 key={d.key} type="button" onClick={() => setFrequency(prev => prev.includes(d.key) ? prev.filter(x => x !== d.key) : [...prev, d.key])}
                 className={`flex-1 h-10 rounded-[10px] text-[12px] font-bold transition-all border ${
-                  frequency.includes(d.key) ? 'text-white border-transparent' : 'glass-input border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                  frequency.includes(d.key) ? 'bg-[var(--accent-color)] text-white border-transparent shadow-md shadow-[var(--accent-color)]/20' : 'glass-input border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
-                style={frequency.includes(d.key) ? { backgroundColor: color, boxShadow: `0 4px 12px ${color}20` } : {}}
               >{d.label}</button>
             ))}
           </div>
@@ -298,8 +297,7 @@ export function HabitForm({ initialData, onSubmit, onClose, submitLabel = 'Creat
 
       <button
         disabled={isPending} type="submit"
-        className="w-full py-4 rounded-[16px] font-black text-[15px] uppercase tracking-widest text-white transition-opacity hover:opacity-90 disabled:opacity-50 mt-2 flex items-center justify-center gap-2 border border-black/10 shadow-lg"
-        style={{ backgroundColor: color, boxShadow: `0 8px 32px ${color}40` }}
+        className="w-full py-3.5 rounded-xl font-bold text-[13px] uppercase tracking-wider bg-[var(--accent-color)] text-white shadow-lg shadow-[var(--accent-color)]/20 hover:opacity-90 transition-opacity disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
       >
         {isPending ? <Icon icon="lucide:loader-2" className="animate-spin text-xl" /> : <>{submitLabel}</>}
       </button>
@@ -311,20 +309,21 @@ export default function AddHabitModal() {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <>
-      <button onClick={() => setIsOpen(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-white text-[14px] bg-[var(--accent-color)] transition-opacity hover:opacity-90 shadow-md shadow-blue-500/10 border border-white/5">
+      <button onClick={() => setIsOpen(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-white text-[14px] bg-[var(--accent-color)] transition-opacity hover:opacity-90 shadow-md shadow-[var(--accent-color)]/20 border border-white/5">
         <Icon icon="lucide:plus" fontSize={18} strokeWidth={2.5} /> New Habit
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/40 backdrop-blur-md z-40" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" />
             <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} className="glass-panel rounded-[28px] p-7 w-full max-w-lg shadow-2xl pointer-events-auto max-h-[95vh] overflow-y-auto custom-scrollbar">
-                <div className="flex items-center justify-between mb-7 border-b border-[var(--border-subtle)] pb-4">
-                  <h2 className="text-[20px] font-extrabold text-[var(--text-primary)] tracking-tight flex items-center gap-2"><Icon icon="lucide:sparkles" className="text-[var(--accent-color)]" /> Configure Habit</h2>
-                  <button onClick={() => setIsOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-full hover:bg-[var(--border-subtle)] transition-colors"><Icon icon="lucide:x" fontSize={20} /></button>
+              <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[32px] p-6 sm:p-8 w-full max-w-md shadow-2xl pointer-events-auto max-h-[95vh] overflow-y-auto custom-scrollbar relative">
+                <button onClick={() => setIsOpen(false)} className="absolute top-6 right-6 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-full hover:bg-[var(--bg-hover)] transition-colors z-10"><Icon icon="lucide:x" fontSize={20} /></button>
+                <div className="w-16 h-16 bg-[var(--accent-color)]/10 rounded-2xl flex items-center justify-center text-[var(--accent-color)] mx-auto mb-6 mt-2">
+                  <Icon icon="lucide:sparkles" fontSize={32} />
                 </div>
+                <h3 className="text-[22px] font-black text-[var(--text-primary)] mb-6 text-center tracking-tight">Configure Habit</h3>
                 <HabitForm onSubmit={async (data: any) => { await createHabit(data); setIsOpen(false); }} onClose={() => setIsOpen(false)} />
               </motion.div>
             </div>
@@ -342,16 +341,17 @@ export function EditHabitModal({ habit, onClose }: { habit: any; onClose: () => 
 
   return (
     <AnimatePresence>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-        <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }} className="glass-panel rounded-[28px] p-7 w-full max-w-lg shadow-2xl pointer-events-auto max-h-[95vh] overflow-y-auto custom-scrollbar">
-          <div className="flex items-center justify-between mb-6 border-b border-[var(--border-subtle)] pb-4">
-            <h2 className="text-xl font-bold text-[var(--text-primary)]">Edit Habit</h2>
-            <div className="flex gap-2">
-              <button onClick={async () => { await deleteHabit(habit.id); onClose(); }} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors"><Icon icon="lucide:trash-2" fontSize={18} /></button>
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-full hover:bg-[var(--bg-hover)] transition-colors"><Icon icon="lucide:x" fontSize={20} /></button>
-            </div>
+        <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-[32px] p-6 sm:p-8 w-full max-w-md shadow-2xl pointer-events-auto max-h-[95vh] overflow-y-auto custom-scrollbar relative">
+          <div className="absolute top-6 right-6 flex gap-2 z-10">
+            <button onClick={async () => { await deleteHabit(habit.id); onClose(); }} className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-500/10 transition-colors"><Icon icon="lucide:trash-2" fontSize={18} /></button>
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-full hover:bg-[var(--bg-hover)] transition-colors"><Icon icon="lucide:x" fontSize={20} /></button>
           </div>
+          <div className="w-16 h-16 bg-[var(--accent-color)]/10 rounded-2xl flex items-center justify-center text-[var(--accent-color)] mx-auto mb-6 mt-2">
+            <Icon icon="lucide:settings" fontSize={32} />
+          </div>
+          <h3 className="text-[22px] font-black text-[var(--text-primary)] mb-6 text-center tracking-tight">Edit Habit</h3>
           <HabitForm initialData={habit} onSubmit={handleUpdate} onClose={onClose} submitLabel="Save Changes" />
         </motion.div>
       </div>

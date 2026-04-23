@@ -6,7 +6,7 @@ import AddHabitModal from '@/components/AddHabitModal';
 import HabitList from '@/components/HabitList';
 import WeekdayStrip from '@/components/WeekdayStrip';
 import HeatmapInline from '@/components/HeatmapInline';
-import { toggleHabitLog } from '@/app/dashboard/actions';
+import { toggleHabitLog, adjustHabitLogValue } from '@/app/dashboard/actions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from '@iconify/react';
 
@@ -57,6 +57,10 @@ function ConfirmationModal({ isOpen, onConfirm, onCancel, date }: { isOpen: bool
   );
 }
 
+type Action = 
+  | { type: 'toggle'; habitId: string; isCompleted: boolean; date: string }
+  | { type: 'adjust'; habitId: string; date: string; delta: number; target: number };
+
 export default function OptimisticDashboard({
   habits,
   initialTodayLogs,
@@ -71,19 +75,45 @@ export default function OptimisticDashboard({
   currentYear: number;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [showConfirm, setShowConfirm] = useState<{ isOpen: boolean; habitId: string; isCompleted: boolean } | null>(null);
+  const [showConfirm, setShowConfirm] = useState<{ action: 'toggle' | 'adjust', habitId: string, isCompleted?: boolean, delta?: number, target?: number } | null>(null);
 
-  const [allLogs, addOptimisticLog] = useOptimistic(
+  const [allLogs, dispatchOptimisticLog] = useOptimistic(
     initialAllLogs,
-    (state, { habitId, isCompleted, date }) => {
-      const existingIdx = state.findIndex(l => l.habit_id === habitId && l.log_date === date);
-      if (isCompleted) {
-        if (existingIdx > -1) return state; // Already exists
-        return [...state, { habit_id: habitId, log_date: date, is_completed: true }];
-      } else {
-        if (existingIdx === -1) return state; // Doesn't exist
-        return state.filter((_, i) => i !== existingIdx);
+    (state, action: Action) => {
+      if (action.type === 'toggle') {
+        const { habitId, isCompleted, date } = action;
+        const existingIdx = state.findIndex(l => l.habit_id === habitId && l.log_date === date);
+        if (isCompleted) {
+          if (existingIdx > -1) return state; // Already exists
+          return [...state, { habit_id: habitId, log_date: date, is_completed: true }];
+        } else {
+          if (existingIdx === -1) return state; // Doesn't exist
+          return state.filter((_, i) => i !== existingIdx);
+        }
+      } else if (action.type === 'adjust') {
+        const { habitId, date, delta, target } = action;
+        const existingIdx = state.findIndex(l => l.habit_id === habitId && l.log_date === date);
+        let currentVal = 0;
+        if (existingIdx > -1) currentVal = state[existingIdx].value || 0;
+        const newVal = Math.max(0, currentVal + delta);
+        const isCompleted = newVal >= target;
+        
+        if (existingIdx > -1) {
+          const newState = [...state];
+          if (newVal === 0 && !isCompleted) {
+            newState.splice(existingIdx, 1);
+          } else {
+            newState[existingIdx] = { ...newState[existingIdx], value: newVal, is_completed: isCompleted };
+          }
+          return newState;
+        } else {
+          if (newVal > 0 || isCompleted) {
+            return [...state, { habit_id: habitId, log_date: date, value: newVal, is_completed: isCompleted }];
+          }
+          return state;
+        }
       }
+      return state;
     }
   );
 
@@ -92,18 +122,34 @@ export default function OptimisticDashboard({
 
   const executeToggle = async (habitId: string, isCompleted: boolean) => {
     startTransition(async () => {
-      addOptimisticLog({ habitId, isCompleted, date: selectedDateStr });
+      dispatchOptimisticLog({ type: 'toggle', habitId, isCompleted, date: selectedDateStr });
       await toggleHabitLog(habitId, selectedDateStr, isCompleted);
+    });
+    setShowConfirm(null);
+  };
+
+  const executeAdjust = async (habitId: string, delta: number, target: number) => {
+    startTransition(async () => {
+      dispatchOptimisticLog({ type: 'adjust', habitId, date: selectedDateStr, delta, target });
+      await adjustHabitLogValue(habitId, selectedDateStr, delta, target);
     });
     setShowConfirm(null);
   };
 
   const handleToggle = async (habitId: string, isCompleted: boolean) => {
     if (selectedDateStr !== today) {
-      setShowConfirm({ isOpen: true, habitId, isCompleted });
+      setShowConfirm({ action: 'toggle', habitId, isCompleted });
       return;
     }
     await executeToggle(habitId, isCompleted);
+  };
+
+  const handleAdjust = async (habitId: string, delta: number, target: number) => {
+    if (selectedDateStr !== today) {
+      setShowConfirm({ action: 'adjust', habitId, delta, target });
+      return;
+    }
+    await executeAdjust(habitId, delta, target);
   };
 
   // Recalculate everything based on optimistic logs
@@ -115,7 +161,7 @@ export default function OptimisticDashboard({
   
   const last7 = eachDayOfInterval({ start: weekStart, end: weekEnd }).map((d) => {
     const dateStr = format(d, 'yyyy-MM-dd');
-    const completedCount = allLogs.filter(l => l.log_date === dateStr).length;
+    const completedCount = allLogs.filter(l => l.log_date === dateStr && l.is_completed).length;
     return { 
       date: dateStr, 
       dayLabel: format(d, 'EEE'), 
@@ -139,7 +185,7 @@ export default function OptimisticDashboard({
     const dateStr = format(d, 'yyyy-MM-dd');
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const isFuture = dateStr > todayStr;
-    const logsForDay = allLogs.filter(l => l.log_date === dateStr);
+    const logsForDay = allLogs.filter(l => l.log_date === dateStr && l.is_completed);
 
     const activeBuildHabits = buildHabits.filter(h => h.start_date <= dateStr);
     const activeQuitHabits = quitHabits.filter(h => h.start_date <= dateStr);
@@ -161,15 +207,22 @@ export default function OptimisticDashboard({
   });
 
   const formattedDate = format(new Date(selectedDateStr), 'EEEE, MMMM do');
-  const totalCompletedViewed = viewedLogs.length;
+  const totalCompletedViewed = viewedLogs.filter(l => l.is_completed).length;
   const viewedPct = habitCount > 0 ? Math.round((totalCompletedViewed / habitCount) * 100) : 0;
 
   return (
     <div className="w-full space-y-6">
       <ConfirmationModal 
-        isOpen={showConfirm?.isOpen || false} 
+        isOpen={!!showConfirm} 
         date={selectedDateStr}
-        onConfirm={() => showConfirm && executeToggle(showConfirm.habitId, showConfirm.isCompleted)}
+        onConfirm={() => {
+          if (!showConfirm) return;
+          if (showConfirm.action === 'toggle') {
+            executeToggle(showConfirm.habitId, showConfirm.isCompleted!);
+          } else {
+            executeAdjust(showConfirm.habitId, showConfirm.delta!, showConfirm.target!);
+          }
+        }}
         onCancel={() => setShowConfirm(null)}
       />
 
@@ -229,6 +282,7 @@ export default function OptimisticDashboard({
           realToday={today}
           allLogs={allLogs}
           onToggle={handleToggle}
+          onAdjust={handleAdjust}
         />
       </section>
 

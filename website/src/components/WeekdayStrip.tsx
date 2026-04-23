@@ -28,10 +28,8 @@ export default function WeekdayStrip({
     <div className="flex items-center gap-2">
       {/* Date Picker Button */}
       <Popover>
-        <PopoverTrigger asChild>
-          <button className="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-all">
-            <Icon icon="lucide:calendar-search" className="text-[var(--text-secondary)]" fontSize={20} />
-          </button>
+        <PopoverTrigger className="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-all">
+          <Icon icon="lucide:calendar-search" className="text-[var(--text-secondary)]" fontSize={20} />
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 border-[var(--border-subtle)] bg-[var(--bg-card)] backdrop-blur-xl" align="start">
           <Calendar

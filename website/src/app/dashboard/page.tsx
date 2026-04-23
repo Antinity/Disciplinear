@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   const [habitsRes, todayLogsRes, allLogsRes] = await Promise.all([
     supabase.from('habits').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     supabase.from('habit_logs').select('*').eq('user_id', user.id).eq('log_date', today),
-    supabase.from('habit_logs').select('habit_id,log_date,is_completed').eq('user_id', user.id).gte('log_date', startOfThisYear).lte('log_date', endOfThisYear).eq('is_completed', true),
+    supabase.from('habit_logs').select('habit_id,log_date,is_completed,value').eq('user_id', user.id).gte('log_date', startOfThisYear).lte('log_date', endOfThisYear),
   ]);
 
   const habits = habitsRes.data || [];

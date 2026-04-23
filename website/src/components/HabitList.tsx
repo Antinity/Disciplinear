@@ -83,12 +83,14 @@ export default function HabitList({
   today,
   allLogs,
   onToggle,
+  onAdjust,
 }: {
   habits: Habit[];
   logs: HabitLog[];
   today: string;
-  allLogs: { habit_id: string; log_date: string; is_completed: boolean }[];
+  allLogs: { habit_id: string; log_date: string; is_completed: boolean; value?: number; }[];
   onToggle: (habitId: string, newVal: boolean) => Promise<void>;
+  onAdjust: (habitId: string, delta: number, target: number) => Promise<void>;
 }) {
   if (habits.length === 0) {
     return (
@@ -112,16 +114,22 @@ export default function HabitList({
           // Calculate 7-day history for sparkline
           const history = Array.from({ length: 7 }, (_, i) => {
             const date = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
-            const hasLog = allLogs.some(l => l.habit_id === habit.id && l.log_date === date && l.is_completed);
-            if (habit.mode === 'build') return hasLog ? 1 : 0;
-            return hasLog ? 0 : 1; // For quit mode, no log = 1 (success)
+            const logEntry = allLogs.find(l => l.habit_id === habit.id && l.log_date === date);
+            
+            if (habit.type === 'amount') {
+              return logEntry?.value || 0;
+            } else {
+              const hasLog = !!logEntry?.is_completed;
+              if (habit.mode === 'build') return hasLog ? 1 : 0;
+              return hasLog ? 0 : 1;
+            }
           });
 
           return (
             <HabitCard
               key={habit.id}
               habit={habit}
-              isCompleted={isCompleted}
+              log={log}
               today={today}
               index={i}
               streak={streak}
@@ -129,6 +137,9 @@ export default function HabitList({
               allLogs={allLogs}
               onToggle={async (newVal) => {
                 await onToggle(habit.id, newVal);
+              }}
+              onAdjust={async (delta, target) => {
+                await onAdjust(habit.id, delta, target);
               }}
             />
           );
@@ -140,28 +151,79 @@ export default function HabitList({
 
 function HabitCard({
   habit,
-  isCompleted,
+  log,
   today,
   index,
   streak,
   history,
   allLogs,
   onToggle,
+  onAdjust,
 }: {
   habit: Habit;
-  isCompleted: boolean;
+  log: HabitLog | undefined;
   today: string;
   index: number;
   streak: number;
   history: number[];
-  allLogs: { habit_id: string; log_date: string; is_completed: boolean }[];
+  allLogs: { habit_id: string; log_date: string; is_completed: boolean; value?: number; }[];
   onToggle: (newVal: boolean) => Promise<void>;
+  onAdjust: (delta: number, target: number) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const isQuit = habit.mode === 'quit';
-  const displayCompleted = isQuit ? !isCompleted : isCompleted;
+
+  // -- Debounce Logic for Amount Adjustments --
+  const [localDelta, setLocalDelta] = useState(0);
+  const pendingDeltaRef = useRef(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const baseValue = log?.value || 0;
+  const currentVal = Math.max(0, baseValue + localDelta);
+  
+  const isCompleted = !!log?.is_completed;
+  const optimisticCompleted = currentVal >= (habit.target_value || 1);
+  const finalIsCompleted = localDelta !== 0 ? optimisticCompleted : isCompleted;
+  const displayCompleted = isQuit ? !finalIsCompleted : finalIsCompleted;
+
+  const visualHistory = history.map((val, i) => {
+    const historyDate = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
+    if (historyDate === today) {
+      if (habit.type === 'amount') return currentVal;
+      if (habit.mode === 'build') return finalIsCompleted ? 1 : 0;
+      return finalIsCompleted ? 0 : 1;
+    }
+    return val;
+  });
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const handleAdjustClient = (delta: number) => {
+    const newPendingDelta = pendingDeltaRef.current + delta;
+    if (baseValue + newPendingDelta < 0) return; // Prevent going below zero entirely
+    
+    pendingDeltaRef.current = newPendingDelta;
+    setLocalDelta(newPendingDelta);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    timerRef.current = setTimeout(() => {
+      const finalDelta = pendingDeltaRef.current;
+      if (finalDelta !== 0) {
+        startTransition(async () => {
+          await onAdjust(finalDelta, habit.target_value || 1);
+        });
+      }
+      pendingDeltaRef.current = 0;
+      setLocalDelta(0);
+    }, 600);
+  };
 
   const handleToggle = () => {
     startTransition(async () => {
@@ -210,13 +272,13 @@ function HabitCard({
           opacity: { duration: 0.2 },
           scale: { duration: 0.2 }
         }}
-        className={`group relative flex items-center gap-3 p-2.5 rounded-[40px] transition-colors cursor-pointer select-none border border-transparent ${displayCompleted ? 'opacity-80' : 'hover:bg-[var(--bg-hover)]'
+        className={`group relative flex items-center gap-3 p-2.5 rounded-[40px] transition-colors select-none border border-transparent ${habit.type === 'amount' ? '' : 'cursor-pointer'} ${displayCompleted ? 'opacity-80' : 'hover:bg-[var(--bg-hover)]'
           }`}
         style={{
           backgroundColor: `${habit.color}15`,
           border: `1px solid ${displayCompleted ? 'transparent' : `${habit.color}30`}`
         }}
-        onClick={handleToggle}
+        onClick={habit.type === 'amount' ? undefined : handleToggle}
       >
         {/* Left Icon/Emoji Section */}
         {habit.emoji ? (
@@ -237,9 +299,15 @@ function HabitCard({
           <p className="font-black text-[15px] text-[var(--text-primary)] leading-tight truncate">
             {habit.name}
           </p>
-          <p className="text-[11px] font-bold text-[var(--text-secondary)] mt-0.5 truncate opacity-70 tracking-tight leading-none">
+          <p 
+            className="text-[11px] font-bold mt-0.5 truncate tracking-tight leading-none transition-colors"
+            style={{ 
+              color: finalIsCompleted && habit.type === 'amount' ? habit.color : 'var(--text-secondary)',
+              opacity: finalIsCompleted && habit.type === 'amount' ? 1 : 0.7 
+            }}
+          >
             {habit.type === 'amount'
-              ? `${habit.target_value} ${habit.unit || 'units'}`
+              ? `${currentVal} / ${habit.target_value} ${habit.unit || 'units'}`
               : habit.type === 'timer'
                 ? `${habit.target_value} mins`
                 : habit.description || (isQuit ? 'Clean Streak' : 'Building...')}
@@ -247,7 +315,11 @@ function HabitCard({
         </div>
 
         <div className="hidden md:block mr-4 opacity-40 group-hover:opacity-100 transition-opacity">
-          <Sparkline data={history} color={habit.color} />
+          <Sparkline 
+            data={visualHistory} 
+            color={habit.color} 
+            target={habit.type === 'amount' ? (habit.target_value || 1) : undefined}
+          />
         </div>
 
         <button
@@ -273,21 +345,48 @@ function HabitCard({
             </div>
           )}
 
-          <div
-            onClick={handleToggle}
-            className={`w-[36px] h-[36px] rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${isPending ? 'opacity-40 animate-pulse' : ''}`}
-            style={{
-              borderColor: isQuit ? (isCompleted ? '#ef4444' : habit.color) : habit.color,
-              backgroundColor: isCompleted ? (isQuit ? '#ef4444' : habit.color) : 'transparent',
-              color: isCompleted ? 'white' : (isQuit ? '#ef4444' : habit.color)
-            }}
-          >
-            {isQuit ? (
-              isCompleted && <X size={20} strokeWidth={3} />
-            ) : (
-              isCompleted && <Check size={20} strokeWidth={3.5} />
-            )}
-          </div>
+          {habit.type === 'amount' ? (
+            <div className="flex items-center gap-1 bg-[var(--bg-card)] rounded-full p-1 shadow-inner ring-1 ring-[var(--border-subtle)] ml-1">
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleAdjustClient(-1); }} 
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]"
+              >
+                <div style={{ width: 12, height: 2, backgroundColor: 'currentColor', borderRadius: 2 }} />
+              </button>
+              <div 
+                className="min-w-[20px] flex justify-center text-[13px] font-black transition-colors"
+                style={{ color: finalIsCompleted ? habit.color : 'var(--text-primary)' }}
+              >
+                {currentVal}
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleAdjustClient(1); }} 
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white transition-opacity hover:opacity-90 shadow-sm"
+                style={{ backgroundColor: habit.color }}
+              >
+                <div style={{ position: 'relative', width: 12, height: 12 }}>
+                   <div style={{ position: 'absolute', top: 5, left: 0, width: 12, height: 2, backgroundColor: 'white', borderRadius: 2 }} />
+                   <div style={{ position: 'absolute', top: 0, left: 5, width: 2, height: 12, backgroundColor: 'white', borderRadius: 2 }} />
+                </div>
+              </button>
+            </div>
+          ) : (
+            <div
+              onClick={handleToggle}
+              className={`w-[36px] h-[36px] rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${isPending ? 'opacity-40 animate-pulse' : ''}`}
+              style={{
+                borderColor: isQuit ? (finalIsCompleted ? '#ef4444' : habit.color) : habit.color,
+                backgroundColor: finalIsCompleted ? (isQuit ? '#ef4444' : habit.color) : 'transparent',
+                color: finalIsCompleted ? 'white' : (isQuit ? '#ef4444' : habit.color)
+              }}
+            >
+              {isQuit ? (
+                finalIsCompleted && <X size={20} strokeWidth={3} />
+              ) : (
+                finalIsCompleted && <Check size={20} strokeWidth={3.5} />
+              )}
+            </div>
+          )}
         </div>
       </motion.div>
     </>

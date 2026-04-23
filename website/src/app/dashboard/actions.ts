@@ -98,6 +98,37 @@ export async function toggleHabitLog(habitId: string, logDate: string, isComplet
   revalidatePath('/dashboard');
 }
 
+// ─── Adjust Habit Log Value ───────────────────────────────────────────────────
+export async function adjustHabitLogValue(habitId: string, logDate: string, delta: number, targetValue: number) {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { data: log } = await supabase.from('habit_logs')
+    .select('value, is_completed')
+    .match({ habit_id: habitId, log_date: logDate, user_id: user.id })
+    .single();
+
+  const currentValue = log?.value || 0;
+  const newValue = Math.max(0, currentValue + delta);
+  const isCompleted = newValue >= targetValue;
+
+  if (newValue === 0 && !isCompleted) {
+    await supabase.from('habit_logs').delete().match({ habit_id: habitId, log_date: logDate, user_id: user.id });
+  } else {
+    await supabase.from('habit_logs').upsert({
+      habit_id: habitId,
+      user_id: user.id,
+      log_date: logDate,
+      is_completed: isCompleted,
+      value: newValue,
+    }, { onConflict: 'habit_id,log_date' });
+  }
+
+  revalidatePath('/dashboard');
+}
+
 // ─── Save Settings ────────────────────────────────────────────────────────────
 export async function saveSettings(settings: {
   theme?: string;
